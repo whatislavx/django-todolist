@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+*.log
+*.env
+*.sqlite3
+
+build/
+dist/
+*.egg-info/
+
+Dockerfile
+.dockerignore
