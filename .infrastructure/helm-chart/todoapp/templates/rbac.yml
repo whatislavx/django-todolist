@@ -1,0 +1,31 @@
+{{- if .Values.todoapp.rbac.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Chart.Name }}-secrets-reader
+  namespace: {{ .Values.common.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Chart.Name }}-secrets-reader-role
+  namespace: {{ .Values.common.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Chart.Name }}-secrets-reader-binding
+  namespace: {{ .Values.common.namespace }}
+subjects:
+- kind: ServiceAccount
+  name: {{ .Chart.Name }}-secrets-reader
+  namespace: {{ .Values.common.namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Chart.Name }}-secrets-reader-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

@@ -1,0 +1,57 @@
+common:
+  namespace: todoapp
+
+todoapp:
+  image:
+    repository: ikulyk404/todoapp
+    tag: 4.0.1
+    pullPolicy: IfNotPresent
+
+  secrets:
+    SECRET_KEY: "@e2(yx)v&tgh3_s=0yja-i!dpebxsz^dg47x)-k&kq_3zf*9e*"
+    DB_NAME: "app_db"
+    DB_USER: "app_user"
+    DB_PASSWORD: "1234"
+    DB_HOST: "mysql-service.mysql.svc.cluster.local"
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "150m"
+    limits:
+      memory: "512Mi"
+      cpu: "300m"
+
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+  tolerations:
+    - key: "app"
+      operator: "Equal"
+      value: "todoapp"
+      effect: "NoSchedule"
+
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - todoapp
+
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 70
+
+  pvc:
+    storageClassName: "standard"
+    storage: 1Gi
+
+  rbac:
+    enabled: true

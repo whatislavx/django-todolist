@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}-deployment
+  namespace: {{ .Values.common.namespace }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  # Початкова кількість реплік (якщо HPA увімкнено, воно керуватиме цим далі)
+  replicas: {{ .Values.todoapp.hpa.minReplicas | default 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ .Values.todoapp.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.todoapp.rollingUpdate.maxUnavailable }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      serviceAccountName: {{ .Chart.Name }}-secrets-reader
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.todoapp.image.repository }}:{{ .Values.todoapp.image.tag }}"
+        imagePullPolicy: {{ .Values.todoapp.image.pullPolicy }}
+        ports:
+        - containerPort: 8080
+        env:
+        {{- range $k, $v := .Values.todoapp.secrets }}
+        - name: {{ $k }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ $.Chart.Name }}-secret
+              key: {{ $k }}
+        {{- end }}
+        resources:
+          requests:
+            cpu: {{ .Values.todoapp.resources.requests.cpu }}
+            memory: {{ .Values.todoapp.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.todoapp.resources.limits.cpu }}
+            memory: {{ .Values.todoapp.resources.limits.memory }}
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 1
+        readinessProbe:
+          httpGet:
+            path: /api/ready
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 1
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: pvc-{{ .Chart.Name }}
+
+      {{- with .Values.todoapp.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.todoapp.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
