@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: always
+    command:
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - public
+
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - private
+
+  migration:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: migration
+    env_file:
+      - .env
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - private
+
+  web:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: todoapp
+    restart: always
+    env_file:
+      - .env
+    expose:
+      - "8080"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=django-todolist_public
+      - traefik.http.routers.todo.rule=PathPrefix(`/`)
+      - traefik.http.routers.todo.entrypoints=web
+      - traefik.http.services.todo.loadbalancer.server.port=8080
+    depends_on:
+      db:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+      traefik:
+        condition: service_started
+    networks:
+      - public
+      - private
+
+volumes:
+  mysql_data:
+
+networks:
+  public:
+    driver: bridge
+  private:
+    driver: bridge
+    internal: true
