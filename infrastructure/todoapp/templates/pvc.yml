@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-{{ .Chart.Name }}  
+  namespace: {{ .Values.common.namespace }}
+spec:
+  accessModes:
+    - {{ .Values.todoapp.pvc.accessMode | default "ReadWriteOnce" }}
+  storageClassName: {{ .Values.todoapp.pvc.storageClassName | default "standard" }}
+  resources:
+    requests:
+      storage: {{ .Values.todoapp.pvc.storage | default "1Gi" }}

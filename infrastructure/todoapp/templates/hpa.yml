@@ -1,0 +1,27 @@
+{{- if .Values.todoapp.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Chart.Name }}-hpa
+  namespace: {{ .Values.common.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Chart.Name }}-deployment
+  minReplicas: {{ .Values.todoapp.hpa.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.todoapp.hpa.maxReplicas | default 10 }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.todoapp.hpa.targetCPUUtilizationPercentage | default 80 }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.todoapp.hpa.targetMemoryUtilizationPercentage | default 80 }}
+{{- end }}

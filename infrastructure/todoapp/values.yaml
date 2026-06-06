@@ -1,0 +1,62 @@
+common:
+  namespace: todoapp
+
+service:
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "traefik"
+  host: "localhost"
+
+todoapp:
+  image:
+    repository: todoapp
+    tag: 1.0.8
+    pullPolicy: IfNotPresent
+  secrets:
+    SECRET_KEY: ""
+    ENGINE: "mysql.connector.django"
+    DB_NAME: ""
+    DB_USER: ""
+    DB_PASSWORD: ""
+  dbHost: "proxysql.mysql.svc.cluster.local"
+  migrationDbHost: "mysql-statefulset-0.mysql-headless.mysql.svc.cluster.local"
+  replicaDbHost: "mysql-statefulset-1.mysql-headless.mysql.svc.cluster.local"
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "150m"
+    limits:
+      memory: "512Mi"
+      cpu: "300m"
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+  tolerations:
+    - key: "app"
+      operator: "Equal"
+      value: "todoapp"
+      effect: "NoSchedule"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - todoapp
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 70
+  pvc:
+    accessMode: "ReadWriteOnce"
+    storageClassName: "standard"
+    storage: 1Gi
+  rbac:
+    enabled: true

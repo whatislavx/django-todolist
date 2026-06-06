@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxysql-config
+  namespace: {{ .Values.common.namespace }}
+data:
+  proxysql.cnf: |
+    datadir="/var/lib/proxysql"
+    admin_variables=
+    {
+      admin_credentials="admin:admin"
+      mysql_ifaces="0.0.0.0:6032"
+    }
+
+    mysql_variables=
+    {
+      interfaces="0.0.0.0:6033"
+      monitor_username="repl_user"
+      monitor_password="{{ .Values.mysql.secrets.MYSQL_PASSWORD }}"
+      connection_pool_size=200
+      monitor_connect_interval=5000
+      monitor_ping_interval=5000
+      monitor_read_only_interval=2000
+      monitor_read_only_timeout=500
+      connect_retries_on_failure=10
+    }
+
+    mysql_servers=
+    (
+      {
+        address="{{ .Chart.Name }}-statefulset-0.{{ .Chart.Name }}-headless.{{ .Values.common.namespace }}.svc.cluster.local"
+        port=3306
+        hostgroup=10
+        max_connections=100
+        weight=1
+      },
+      {
+        address="{{ .Chart.Name }}-statefulset-0.{{ .Chart.Name }}-headless.{{ .Values.common.namespace }}.svc.cluster.local"
+        port=3306
+        hostgroup=20
+        max_connections=100
+        weight=1
+      },
+      {
+        address="{{ .Chart.Name }}-statefulset-1.{{ .Chart.Name }}-headless.{{ .Values.common.namespace }}.svc.cluster.local"
+        port=3306
+        hostgroup=20
+        max_connections=100
+        weight=1
+      }
+    )
+
+    mysql_users=
+    (
+      {
+        username="{{ .Values.mysql.secrets.MYSQL_USER }}"
+        password="{{ .Values.mysql.secrets.MYSQL_PASSWORD }}"
+        default_hostgroup=10
+        transaction_persistent=1
+        active=1
+      }
+    )
+
+    mysql_query_rules=
+    (
+      {
+        rule_id=1
+        active=1
+        match_pattern="^SELECT .* FOR UPDATE"
+        destination_hostgroup=10
+        apply=1
+      },
+      {
+        rule_id=2
+        active=1
+        match_pattern="^SELECT"
+        destination_hostgroup=20
+        apply=1
+      }
+    )

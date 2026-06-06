@@ -1,0 +1,75 @@
+stages:
+  - python-ci
+  - docker-ci
+  - security
+  - helm-ci
+
+variables:
+  PYTHON_VERSION: "3.9"
+  DOCKER_IMAGE_NAME: todoapp
+
+python-ci:
+  stage: python-ci
+  image: python:$PYTHON_VERSION
+  before_script:
+    - cd src
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+    - pip install -r requirements-dev.txt
+  script:
+    - coverage run --source='.' manage.py test
+    - coverage report
+    - flake8 . --show-source --statistics --exit-zero
+    - flake8 . --exit-zero --max-complexity=10
+  artifacts:
+    when: always
+    paths:
+      - src/*
+      - infrastructure/*
+    expire_in: 1 hour
+  only:
+    - main
+    - merge_requests
+
+docker-ci:
+  stage: docker-ci
+  image: docker:27
+  services:
+    - docker:27-dind
+  needs:
+    - python-ci
+  before_script:
+    - echo "$DOCKER_HUB_ACCESS_TOKEN" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
+  script:
+    - docker build -t $DOCKER_HUB_USERNAME/$DOCKER_IMAGE_NAME:$CI_COMMIT_SHA ./src
+    - docker push $DOCKER_HUB_USERNAME/$DOCKER_IMAGE_NAME:$CI_COMMIT_SHA
+  only:
+    - main
+
+trivy:
+  stage: security
+  image: aquasec/trivy:latest
+  needs:
+    - docker-ci
+  script:
+    - trivy image --exit-code 0 --severity LOW,MEDIUM $DOCKER_HUB_USERNAME/$DOCKER_IMAGE_NAME:$CI_COMMIT_SHA
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_HUB_USERNAME/$DOCKER_IMAGE_NAME:$CI_COMMIT_SHA
+  allow_failure: true
+  only:
+    - main
+
+helm-ci:
+  stage: helm-ci
+  image: alpine/helm:latest
+  needs:
+    - python-ci
+  script:
+    - helm lint infrastructure/todoapp
+    - helm template todoapp infrastructure/todoapp -f infrastructure/todoapp/values.yaml
+    - helm package infrastructure/todoapp --destination helm-packages
+  artifacts:
+    paths:
+      - helm-packages/*.tgz
+    expire_in: 1 week
+  only:
+    - main

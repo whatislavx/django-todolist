@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Chart.Name }}-migration-job
+  namespace: {{ .Values.common.namespace }}
+  labels:
+    app: {{ .Chart.Name }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 10
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: run-migrations
+          image: "{{ .Values.todoapp.image.repository }}:{{ .Values.todoapp.image.tag }}"
+          imagePullPolicy: {{ .Values.todoapp.image.pullPolicy }}
+          command: ["python", "manage.py", "migrate", "--noinput"]
+          envFrom:
+            - configMapRef:
+                name: {{ .Chart.Name }}-config
+          env:
+            {{- range $k, $v := .Values.todoapp.secrets }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Chart.Name }}-secret
+                  key: {{ $k }}
+            {{- end }}
+            - name: DB_HOST
+              value: {{ .Values.todoapp.migrationDbHost | quote }}

@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxysql
+  namespace: {{ .Values.common.namespace }}
+  labels:
+    app: proxysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxysql
+  template:
+    metadata:
+      labels:
+        app: proxysql
+    spec:
+      containers:
+        - name: proxysql
+          image: proxysql/proxysql:2.6.3
+          command: ["proxysql"]
+          args: ["-f", "--config", "/etc/proxysql/proxysql.cnf"]
+          ports:
+            - name: mysql
+              containerPort: 6033
+            - name: admin
+              containerPort: 6032
+          volumeMounts:
+            - name: proxysql-config
+              mountPath: /etc/proxysql
+          readinessProbe:
+            tcpSocket:
+              port: 6033
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 6033
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      volumes:
+        - name: proxysql-config
+          configMap:
+            name: proxysql-config
+            items:
+              - key: proxysql.cnf
+                path: proxysql.cnf
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxysql
+  namespace: {{ .Values.common.namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: proxysql
+  ports:
+    - name: mysql
+      protocol: TCP
+      port: 3306
+      targetPort: 6033
+    - name: admin
+      protocol: TCP
+      port: 6032
+      targetPort: 6032

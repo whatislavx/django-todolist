@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}-deployment
+  namespace: {{ .Values.common.namespace }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.todoapp.hpa.minReplicas | default 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ .Values.todoapp.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.todoapp.rollingUpdate.maxUnavailable }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      serviceAccountName: {{ if .Values.todoapp.rbac.enabled }}{{ .Chart.Name }}-secrets-reader{{ else }}default{{ end }}
+
+      initContainers:
+        - name: wait-for-db
+          image: "{{ .Values.todoapp.image.repository }}:{{ .Values.todoapp.image.tag }}"
+          imagePullPolicy: {{ .Values.todoapp.image.pullPolicy }}
+          command: ["python", "/scripts/wait-for-db.py"]
+          env:
+            - name: MYSQL_HOSTS
+              value: "{{ .Values.todoapp.migrationDbHost }},{{ .Values.todoapp.replicaDbHost }}"
+            {{- range $k, $v := .Values.todoapp.secrets }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Chart.Name }}-secret
+                  key: {{ $k }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Chart.Name }}-config
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.todoapp.image.repository }}:{{ .Values.todoapp.image.tag }}"
+          imagePullPolicy: {{ .Values.todoapp.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ .Chart.Name }}-config
+          env:
+            {{- range $k, $v := .Values.todoapp.secrets }}
+            - name: {{ $k }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Chart.Name }}-secret
+                  key: {{ $k }}
+            {{- end }}
+            - name: DB_HOST
+              value: {{ .Values.todoapp.dbHost | quote }}
+          resources:
+            requests:
+              cpu: {{ .Values.todoapp.resources.requests.cpu | quote }}
+              memory: {{ .Values.todoapp.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.todoapp.resources.limits.cpu | quote }}
+              memory: {{ .Values.todoapp.resources.limits.memory | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 2
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pvc-{{ .Chart.Name }}
+        - name: scripts
+          configMap:
+            name: {{ .Chart.Name }}-config
+            items:
+              - key: wait-for-db.py
+                path: wait-for-db.py
+
+      {{- with .Values.todoapp.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.todoapp.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
