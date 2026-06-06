@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block body %}
+<section class="header">
+  <div class="row">
+    <div class="three columns value-prop"></div>
+    <div class="six columns">
+      <h2>Create new list</h2>
+      <form action="{% url 'lists:new_todolist' %}" method="post">
+        {% csrf_token %}
+        {{ form }}
+        <input type="submit" value="Create list" class="button-primary">
+      </form>
+
+      {% if user.is_authenticated %}
+      <p style="margin-top: 20px;">
+        <a href="{% url 'lists:overview' %}">My lists</a>
+      </p>
+      {% else %}
+      <p style="margin-top: 20px;">
+        <a href="{% url 'accounts:login' %}">Log in</a> to save your lists
+      </p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}
