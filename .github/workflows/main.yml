@@ -14,7 +14,6 @@ env:
   PYTHON_VERSION: 3.9
   DOCKER_IMAGE_NAME: todoapp
 
-
 jobs:
   python-ci:
     name: Python CI
@@ -32,7 +31,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: |
             src/requirements.txt
             src/requirements-dev.txt
@@ -41,7 +40,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          pip install -r requirements-test.txt
 
       - name: Run Tests with Coverage
         run: |
@@ -95,6 +94,13 @@ jobs:
           context: ./app
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasec/trivy-action@master
+        with:
+          image-ref: "${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
+          format: "table"
+          severity: "HIGH,CRITICAL"
 
   helm-ci:
     name: Helm CI
